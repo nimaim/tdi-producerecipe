@@ -10,10 +10,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
+from webdriver_manager.firefox import GeckoDriverManager
+
+# from selenium.webdriver.chrome.service import Service
+# from selenium.webdriver.chrome.options import Options
+# from webdriver_manager.chrome import ChromeDriverManager
 
 
 def parse_recipe_json(r: dict):
@@ -64,10 +68,17 @@ def get_recipe_json(url: str) -> Optional[dict]:
 
 
 def scrape_recipes_google(ingredients: list, cuisine: str) -> dict:
-    s = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=s)
-    # driver.maximize_window()
-    # TODO: change to headless
+    # s = Service(ChromeDriverManager().install())
+    # driver = webdriver.Chrome(service=s)
+    # # driver.maximize_window()
+
+    ff_options = Options()
+    ff_options.add_argument("--headless")
+    service = Service(GeckoDriverManager().install())
+    driver = webdriver.Firefox(
+        options=ff_options,
+        service=service,
+    )
 
     ingredients_str = '+'.join(ingredients)
     if cuisine == 'Any':
@@ -159,19 +170,27 @@ def scrape_recipes_google(ingredients: list, cuisine: str) -> dict:
 
 
 def scrape_recipes_bing(ingredients: list, cuisine: str, limit: int) -> dict:
-    s = Service(ChromeDriverManager().install())
-    chrome_options = Options()
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-gpu")
-    # chrome_options.add_argument("--headless")
-    chrome_options.add_argument(
-        ("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-         + "AppleWebKit/537.36 (KHTML, like Gecko)"
-         + "Chrome/106.0.0.0 Safari/537.36"))
-    #chrome_options.add_argument("--start-maximized")
-    # chrome_options.add_argument("--window-size=2560,1440")
-    driver = webdriver.Chrome(service=s, options=chrome_options)
+    # s = Service(ChromeDriverManager().install())
+    # chrome_options = Options()
+    # chrome_options.add_argument("--disable-extensions")
+    # chrome_options.add_argument("--disable-gpu")
+    # # chrome_options.add_argument("--headless")
+    # chrome_options.add_argument(
+    #     ("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    #      + "AppleWebKit/537.36 (KHTML, like Gecko)"
+    #      + "Chrome/106.0.0.0 Safari/537.36"))
+    # #chrome_options.add_argument("--start-maximized")
+    # # chrome_options.add_argument("--window-size=2560,1440")
+    # driver = webdriver.Chrome(service=s, options=chrome_options)
     # driver.maximize_window()
+
+    ff_options = Options()
+    ff_options.add_argument("--headless")
+    service = Service(GeckoDriverManager().install())
+    driver = webdriver.Firefox(
+        options=ff_options,
+        service=service,
+    )
 
     ingredients_str = '+'.join(ingredients)
     if cuisine == 'Any':
