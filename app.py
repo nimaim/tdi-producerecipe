@@ -4,8 +4,7 @@ import numpy as np
 from PIL import Image
 import random
 import time
-from st_aggrid import AgGrid, \
-    GridOptionsBuilder, GridUpdateMode, JsCode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 import model_helper as mh
 import scraper
