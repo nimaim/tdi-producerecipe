@@ -15,70 +15,36 @@ from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from webdriver_manager.firefox import GeckoDriverManager
 
-# from selenium.webdriver.chrome.service import Service
-# from selenium.webdriver.chrome.options import Options
-# from webdriver_manager.chrome import ChromeDriverManager
-
-
-def parse_recipe_json(r: dict):
-    ### Type 1
-    if '@graph' not in r.keys():
-        print(r['name'])
-        print(r['description'])
-        print(r['author']['name'])
-        print(r['image'])
-
-        for ingredient in r['recipeIngredient']:
-            fixed_str = re.sub(r'\s+', ' ', ingredient.strip())
-            print(fixed_str)
-
-        for step in r['recipeInstructions']:
-            # fixed_str = re.sub(r'\s+', ' ', ingredient.strip())
-            print(step['text'])
-    else:
-        for d in r['@graph']:  # dict
-            if 'Recipe' in d['@type']:  # list
-                print(d['name'])
-                print(d['description'])
-                print(d['author']['name'])
-                print(d['image'][0])
-                print(d['recipeYield'][0], 'servings')
-                print(*d['recipeIngredient'], sep='\n')
-                for step in d['recipeInstructions']:
-                    if 'text' in step.keys():
-                        print(step['text'])
-                for n in d['nutrition']:
-                    if '@' not in n:
-                        print(f'{n}: {d["nutrition"][n]}')
-
-    return dict()
-
 
 def get_recipe_json(url: str) -> Optional[dict]:
     parser = "html.parser"
     req = requests.get(url)
     soup = BeautifulSoup(req.text, parser)
     script = soup.find("script", {"type": "application/ld+json"})
-    if script.contents:
-        parsed = json.loads(script.contents[0])
-        print(json.dumps(parsed, indent=4))  # pretty print json file
-        return parsed
-    else:
-        return None
+    if script and script.contents:
+        try:
+            parsed = json.loads(script.contents[0])
+            # print(json.dumps(parsed, indent=4))  # pretty print json file
+            return parsed
+        except json.JSONDecodeError:
+            return None
+    return None
 
 
-def scrape_recipes_google(ingredients: list, cuisine: str) -> dict:
-    # s = Service(ChromeDriverManager().install())
-    # driver = webdriver.Chrome(service=s)
-    # # driver.maximize_window()
-
+def setup_webdriver() -> webdriver.Firefox:
     ff_options = Options()
-    ff_options.add_argument("--headless")
+    ff_options.add_argument('--headless')
     service = Service(GeckoDriverManager().install())
     driver = webdriver.Firefox(
         options=ff_options,
         service=service,
     )
+    return driver
+
+
+def scrape_recipes_google(ingredients: list, cuisine: str) -> dict:
+
+    driver = setup_webdriver()
 
     ingredients_str = '+'.join(ingredients)
     if cuisine == 'Any':
@@ -170,27 +136,8 @@ def scrape_recipes_google(ingredients: list, cuisine: str) -> dict:
 
 
 def scrape_recipes_bing(ingredients: list, cuisine: str, limit: int) -> dict:
-    # s = Service(ChromeDriverManager().install())
-    # chrome_options = Options()
-    # chrome_options.add_argument("--disable-extensions")
-    # chrome_options.add_argument("--disable-gpu")
-    # # chrome_options.add_argument("--headless")
-    # chrome_options.add_argument(
-    #     ("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    #      + "AppleWebKit/537.36 (KHTML, like Gecko)"
-    #      + "Chrome/106.0.0.0 Safari/537.36"))
-    # #chrome_options.add_argument("--start-maximized")
-    # # chrome_options.add_argument("--window-size=2560,1440")
-    # driver = webdriver.Chrome(service=s, options=chrome_options)
-    # driver.maximize_window()
 
-    ff_options = Options()
-    ff_options.add_argument("--headless")
-    service = Service(GeckoDriverManager().install())
-    driver = webdriver.Firefox(
-        options=ff_options,
-        service=service,
-    )
+    driver = setup_webdriver()
 
     ingredients_str = '+'.join(ingredients)
     if cuisine == 'Any':
@@ -211,6 +158,13 @@ def scrape_recipes_bing(ingredients: list, cuisine: str, limit: int) -> dict:
         'ratings': [],
         'reviews': []
     }
+
+    # On FF, Bing throws up banner to add Bing extension to browser, we need to find it and click 'Maybe Later'
+    try:
+        maybe_later_text = driver.find_element(By.XPATH, '//span[@id="bnp_hfly_cta2"]')
+        WebDriverWait(driver, 5).until(EC.element_to_be_clickable(maybe_later_text)).click()
+    except NoSuchElementException:
+        print("Banner not found, skipping...")
 
     see_more_button = driver.find_element(By.XPATH, '//a[@title="See more" and @role="button"]')
     print(see_more_button)  # just for debug
@@ -306,15 +260,12 @@ def scrape_recipes_bing(ingredients: list, cuisine: str, limit: int) -> dict:
 
        # print(f'{index + 1}\n{title}\n{link}\n{source}\n{reviews}\n{total_time}\n{calories}\n{servings}\n{rating}\n')
 
-    driver.quit()
+    # driver.quit()
 
     return results_dict
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    pass
     # test_app()
-    ld_json = get_recipe_json('https://www.food.com/recipe/spicy-eggplant-and-capsicum-bell-pepper-chutney-472927')
-    parse_recipe_json(ld_json)
-    # print(ld_json.keys())
-    # print(ld_json['nutrition'])
+

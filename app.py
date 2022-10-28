@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from PIL import Image
-import random
-import time
+import time, random
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, JsCode
 
 import model_helper as mh
-import scraper
+import recipe_scraper as scraper
+import recipe_parser as parser
 
 # Main title headers
 # st.set_page_config(layout="wide")
@@ -116,9 +115,9 @@ def process_recipes_to_df(recipe_dict, filter_opt):
     df['ratings'] = df['ratings'].astype(float) / 1.0
 
     if filter_opt == 'Popularity':
-        df = df.dropna(subset=['reviews'])\
+        df = df.dropna(subset=['reviews']) \
+            .astype({'reviews': 'int32'}) \
             .sort_values(by='reviews', ascending=False)\
-            .astype({'reviews': 'int32'})\
             .reset_index(drop=True)
     elif filter_opt == 'Calories':
         if 'calories' in df.columns:
@@ -129,27 +128,44 @@ def process_recipes_to_df(recipe_dict, filter_opt):
     elif filter_opt == 'Time':
         df = df.dropna(subset=['total_time'])\
             .astype({'total_time': 'int32'})\
-            .sort_values(by='total_time').reset_index(drop=True)
+            .sort_values(by='total_time')\
+            .reset_index(drop=True)
 
     return df
 
 
 def build_and_configure_aggrid(df):
-    # st.dataframe(recipe_df, use_container_width=True)
-    gd = GridOptionsBuilder.from_dataframe(df)
-    gd.configure_pagination(enabled=True)
-
-    cell_renderer = JsCode("""
+    gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_pagination(enabled=True)
+    gb.configure_selection(selection_mode='disabled', use_checkbox=False)
+    gb.configure_column('title', cellRenderer=JsCode("""
     function(params) {return `<a href=${params.data.link} target="_blank">${params.value}</a>`}
-    """)
+    """))
+    gb.configure_column('link', hide='True')
+    gb.configure_column('image', hide='True')
 
-    gd.configure_column('title', cellRenderer=cell_renderer)
-    gd.configure_column('link', hide='True')
-    gd.configure_selection(selection_mode='single', use_checkbox=True)
-    grid_options = gd.build()
+    grid_options = gb.build()
 
     return grid_options
-    # st.write(recipes_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+
+def print_recipe(recipe_item):
+    if recipe_item.name:
+        st.subheader(recipe_item.name)
+    if recipe_item.image:
+        st.image(recipe_item.image)
+    if recipe_item.description:
+        st.write(recipe_item.description)
+    if recipe_item.author:
+        st.write(recipe_item.author)
+    if recipe_item.servings:
+        st.write(recipe_item.servings)
+    if recipe_item.ingredients:
+        st.markdown(recipe_item.ingredients)
+    if recipe_item.instructions:
+        st.write(recipe_item.instructions)
+    if recipe_item.nutrition:
+        st.write(recipe_item.nutrition)
 
 
 # NOTE: There is no entry point for a streamlit app, the entire script will re-run on any UI interaction
@@ -168,6 +184,9 @@ def main():
     if 'results_btn_clicked' not in st.session_state:
         st.session_state.results_btn_clicked = False
 
+    if 'random_number' not in st.session_state:
+        st.session_state.random_number = -1
+
     # Define session state callbacks
     def classify_click_cb():
         st.session_state.classify_btn_clicked = True
@@ -176,6 +195,7 @@ def main():
         st.session_state.scrape_btn_clicked = True
 
     def results_click_cb():
+        st.session_state.random_number = random.randint(0, 14)
         st.session_state.results_btn_clicked = True
 
     with st.spinner('Loading model...'):
@@ -271,7 +291,7 @@ def main():
         else:
             recipe_dict = scrape_recipes(pred_dict, cuisine_option, engine_option, limit_option, ignore_option)
             recipe_df = process_recipes_to_df(recipe_dict, filter_option)
-            row_idx = recipe_df.head(15).sample(frac=1.0, random_state=111).head(1).index.tolist()[0]
+            # st.session_state.recipe_df = process_recipes_to_df(recipe_dict, filter_option)
 
             # Display some images
             st.subheader("Sample of scraped recipes:")
@@ -286,53 +306,51 @@ def main():
     with st.sidebar.form(key='results_form'):
         st.subheader("Step 3: Display")
 
-        results_btn = st.form_submit_button("Show Recipes", on_click=results_click_cb)
-        hungry_check = st.checkbox("I'm Feeling Hungry", value=True)
-        st.caption('Click button to display results and a recipe title to go to a recipe in a new window. '
-                   'Additionally, check option to instantly pick and display a random recipe on the current page.')
+        results_btn = st.form_submit_button("Show Recipe(s)", on_click=results_click_cb)
+        hungry_check = st.checkbox("I'm Feeling Hungry", value=False)
+        st.caption('Click button to display results table and a recipe title to go to recipe in a new window. '
+                   'Check option to bypass results and display a randomly selected recipe on the current page.')
 
     if results_btn or st.session_state.results_btn_clicked:
         if not st.session_state.scrape_btn_clicked:
             st.sidebar.warning('Please scrape image(s) first!')
             st.session_state.results_btn_clicked = False
         else:
-
-            gb = GridOptionsBuilder.from_dataframe(recipe_df)
-            gb.configure_pagination(enabled=True)
-            gb.configure_column('title', cellRenderer=JsCode("""
-            function(params) {return `<a href=${params.data.link} target="_blank">${params.value}</a>`}
-            """))
-            gb.configure_column('link',  hide='True')
-            gb.configure_column('image', hide='True')
-
             # TODO: Do NOT pick something with number in title that we won't be able to parse json for
             if hungry_check:
-                gb.configure_selection(selection_mode='single',
-                                       use_checkbox=True,
-                                       pre_selected_rows=[row_idx])
+                # Display a random recipe on the page
+                recipe_filled = False
+
+                while not recipe_filled:
+                    row_idx = recipe_df.head(100).sample().index.tolist()[0]
+                    print(row_idx, recipe_df.loc[row_idx, 'title'])
+                    json_ld = scraper.get_recipe_json(recipe_df.loc[row_idx, 'link'])
+                    if not json_ld:
+                        continue
+                    recipe_item = parser.RecipeItem(json_ld)
+                    # TODO: This assumes at least one recipe will parse, fix to add max retries
+                    recipe_filled = recipe_item.fill_values()
+
+                if recipe_item.name:
+                    with st.container():
+                        print_recipe(recipe_item)
+                    st.success('Done! Recipe produced successfully!')
+                    # st.snow()
+                else:
+                    st.error('Error parsing JSON-LD script, try another recipe.')
+
             else:
-                gb.configure_selection(selection_mode='single', use_checkbox=False)
+                # Display the entire table of recipes
+                aggrid_options = build_and_configure_aggrid(recipe_df)
+                aggrid_table = AgGrid(recipe_df,
+                                      fit_columns_on_grid_load=True,
+                                      gridOptions=aggrid_options,
+                                      update_mode=GridUpdateMode.SELECTION_CHANGED,
+                                      allow_unsafe_jscode=True,
+                                      theme='streamlit')
 
-            aggrid_options = gb.build()
-            aggrid_table = AgGrid(recipe_df,
-                                  fit_columns_on_grid_load=True,
-                                  gridOptions=aggrid_options,
-                                  update_mode=GridUpdateMode.SELECTION_CHANGED,
-                                  allow_unsafe_jscode=True,
-                                  theme='streamlit')
-
-            if hungry_check:
-                sel_row = aggrid_table.selected_rows
-
-                if sel_row:
-                    st.write(sel_row)
-                    json_ld = scraper.get_recipe_json(sel_row[0]['link'])
-                    if json_ld:
-                        scraper.parse_recipe_json(json_ld)
-                    else:
-                        st.error('JSON-LD script not found on page, try another recipe.')
-
-            st.success('Done! ProduceRecipe successful!')
+                st.success('Done! Recipes produced successfully!')
+                # st.snow()
 
 
 if __name__ == "__main__":

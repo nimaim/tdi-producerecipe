@@ -12,7 +12,7 @@ def predict(img, model, classes):
     test_image = np.expand_dims(test_image, axis=0)
          
     pred_prob = model.predict(test_image)
-    pred_class = classes[pred_prob.argmax()] # find the predicted class   
+    pred_class = classes[pred_prob.argmax()]  # find the predicted class
     result = (pred_class, pred_prob.max())
     
     return result
