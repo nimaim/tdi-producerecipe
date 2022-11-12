@@ -184,9 +184,6 @@ def main():
     if 'results_btn_clicked' not in st.session_state:
         st.session_state.results_btn_clicked = False
 
-    if 'random_number' not in st.session_state:
-        st.session_state.random_number = -1
-
     # Define session state callbacks
     def classify_click_cb():
         st.session_state.classify_btn_clicked = True
@@ -195,7 +192,6 @@ def main():
         st.session_state.scrape_btn_clicked = True
 
     def results_click_cb():
-        st.session_state.random_number = random.randint(0, 14)
         st.session_state.results_btn_clicked = True
 
     with st.spinner('Loading model...'):
@@ -241,6 +237,7 @@ def main():
                 pred_dict['prediction'].append(cur_pred)
                 pred_dict['probability'].append(f'{cur_prob:.4f}')
 
+            st.subheader("Predictions:")
             pred_df = process_predictions_to_df(pred_dict)
             st.dataframe(pred_df, use_container_width=True)
 
@@ -294,7 +291,7 @@ def main():
             # st.session_state.recipe_df = process_recipes_to_df(recipe_dict, filter_option)
 
             # Display some images
-            st.subheader("Sample of scraped recipes:")
+            st.subheader("Sample Recipes:")
             grid2 = create_image_grid(6, 3)
 
             for idx in range(6):
@@ -307,7 +304,7 @@ def main():
         st.subheader("Step 3: Display")
 
         results_btn = st.form_submit_button("Show Recipe(s)", on_click=results_click_cb)
-        hungry_check = st.checkbox("I'm Feeling Hungry", value=False)
+        hungry_check = st.checkbox("I'm Feeling Hungry", value=True)
         st.caption('Click button to display results table and a recipe title to go to recipe in a new window. '
                    'Check option to bypass results and display a randomly selected recipe on the current page.')
 
@@ -333,6 +330,7 @@ def main():
 
                 if recipe_item.name:
                     with st.container():
+                        st.subheader("Selected Recipe:")
                         print_recipe(recipe_item)
                     st.success('Done! Recipe produced successfully!')
                     # st.snow()
@@ -341,6 +339,7 @@ def main():
 
             else:
                 # Display the entire table of recipes
+                st.subheader("Recipe Results:")
                 aggrid_options = build_and_configure_aggrid(recipe_df)
                 aggrid_table = AgGrid(recipe_df,
                                       fit_columns_on_grid_load=True,
